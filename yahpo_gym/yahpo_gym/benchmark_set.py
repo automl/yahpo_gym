@@ -387,8 +387,6 @@ class BenchmarkSet:
             configuration = dict(configuration)
 
         # Re-order:
-        # TODO test if this is the same
-        # self.config_space._sort_hyperparameters()
         configuration = configuration.copy()
         configuration = {
             k: configuration.get(k)
