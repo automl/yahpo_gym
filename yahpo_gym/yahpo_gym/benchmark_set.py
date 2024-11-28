@@ -106,7 +106,7 @@ class BenchmarkSet:
             configuration = [configuration]
 
         configuration = [
-            cf.get_dictionary() if isinstance(cf, CS.Configuration) else cf
+            dict(cf) if isinstance(cf, CS.Configuration) else cf
             for cf in configuration
         ]
 
@@ -197,8 +197,8 @@ class BenchmarkSet:
             A valid value for the parameter `param`.
         """
         if param is not None:
-            hpar = self.config_space.get_hyperparameter(param)
-            if not hpar.is_legal(value):
+            hpar = self.config_space[param]
+            if not hpar.legal_value(value):
                 raise Exception(f"Value {value} not allowed for parameter {param}!")
             self.constants[param] = value
 
@@ -226,17 +226,17 @@ class BenchmarkSet:
             Seed for the ConfigSpace. Optional, initialized to None.
         """
         csn = copy.deepcopy(self.config_space)
-        hps = csn.get_hyperparameters()
+        hps = list(csn.values())
 
         # Set constants (e.g. instance)
         for p, v in self.constants.items():
-            param_idx = csn.get_hyperparameter_names().index(p)
+            param_idx = list(csn.keys()).index(p)
             hps[param_idx] = CSH.Constant(p, v)
 
         # Drop fidelity parameters
         if drop_fidelity_params:
             fidelity_params_idx = [
-                csn.get_hyperparameter_names().index(fidelity_param)
+                list(csn.keys()).index(fidelity_param)
                 for fidelity_param in self.config.fidelity_params
             ]
             fidelity_params_idx.sort()
@@ -245,12 +245,12 @@ class BenchmarkSet:
                 del hps[idx]
 
         # Rebuild ConfigSpace
-        cnds = csn.get_conditions()
-        fbds = csn.get_forbiddens()
+        cnds = csn.conditions
+        fbds = csn.forbidden_clauses
         cs = CS.ConfigurationSpace(seed=seed)
-        cs.add_hyperparameters(hps)
-        cs.add_conditions(cnds)
-        cs.add_forbidden_clauses(fbds)
+        cs.add(hps)
+        cs.add(cnds)
+        cs.add(fbds)
         return cs
 
     def get_fidelity_space(self, seed: int = None):
@@ -263,14 +263,14 @@ class BenchmarkSet:
             Seed for the ConfigSpace. Optional, initialized to None.
         """
         csn = copy.deepcopy(self.config_space)
-        hps = csn.get_hyperparameters()
+        hps = list(csn.values())
         fidelity_params_idx = [
-            csn.get_hyperparameter_names().index(fidelity_param)
+            list(csn.keys()).index(fidelity_param)
             for fidelity_param in self.config.fidelity_params
         ]
         hps = [hps[idx] for idx in fidelity_params_idx]
         cs = CS.ConfigurationSpace(seed=seed)
-        cs.add_hyperparameters(hps)
+        cs.add(hps)
         return cs
 
     def set_session(
@@ -316,7 +316,7 @@ class BenchmarkSet:
         if self.config.instance_names is None:
             return self.config.config["instances"]
         return [
-            *self.config_space.get_hyperparameter(self.config.instance_names).choices
+            *self.config_space[self.config.instance_names].choices
         ]
 
     @property
@@ -384,19 +384,20 @@ class BenchmarkSet:
 
     def _config_to_xs(self, configuration):
         if type(configuration) == CS.Configuration:
-            configuration = configuration.get_dictionary()
+            configuration = dict(configuration)
 
         # Re-order:
-        self.config_space._sort_hyperparameters()
+        # TODO test if this is the same
+        # self.config_space._sort_hyperparameters()
         configuration = configuration.copy()
         configuration = {
             k: configuration.get(k)
-            for k in self.config_space.get_hyperparameter_names()
+            for k in list(self.config_space.keys())
             if configuration.get(k) is not None
         }
 
         if self.check:
-            self.config_space.check_configuration(
+            self.config_space.check_valid_configuration(
                 CS.Configuration(
                     self.config_space,
                     values=configuration,
@@ -409,7 +410,7 @@ class BenchmarkSet:
             [configuration.update({k: v}) for k, v in self.constants.items()]
 
         # FIXME: check NA handling below
-        all = self.config_space.get_hyperparameter_names()
+        all = list(self.config_space.keys())
         missing = list(set(all).difference(set(configuration.keys())))
         for hp in missing:
             value = (
@@ -454,7 +455,7 @@ class BenchmarkSet:
         return cs
 
     def _eval_random(self):
-        cfg = self.config_space.sample_configuration().get_dictionary()
+        cfg = dict(self.config_space.sample_configuration())
         return self.objective_function(cfg, logging=False, multithread=False)[0]
 
     def _infer_quant(self):
