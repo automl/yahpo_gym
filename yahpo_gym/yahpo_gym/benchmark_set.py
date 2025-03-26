@@ -395,7 +395,7 @@ class BenchmarkSet:
         }
 
         if self.check:
-            self.config_space.check_valid_configuration(
+            self.config_space.check_configuration(
                 CS.Configuration(
                     self.config_space,
                     values=configuration,
